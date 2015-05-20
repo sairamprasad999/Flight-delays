@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html>
+<meta charset="utf-8">
+
+<head>
+  <title>Weather Delayed Flights</title>
+  <script src="http://d3js.org/d3.v3.min.js"></script>
+  <link href='http://fonts.googleapis.com/css?family=EB+Garamond' rel='stylesheet' type='text/css'>
+    <script src="http://code.jquery.com/jquery.min.js"></script>
+</head>
+
+<style>
+  body {
+    background-color: #F3EFE0;
+    font-family: 'EB Garamond', serif;
+    color: #354458;
+  }
+  h3{
+    font-size: 38px;
+    text-align: center;
+    font-family: 'EB Garamond', serif;
+    color: #354458;
+  }
+  .axis_label {
+    font-size: 18px;
+    text-anchor: middle;
+    font-family: 'EB Garamond', serif;
+    font-weight:bold;
+  }
+  .resize path {
+    fill: #E9E0D6;
+    fill-opacity: .8;
+    stroke: #000;
+    stroke-width: 1.5px;
+  }
+  .axis path, .axis line {
+    fill: none;
+    stroke: #000;
+    shape-rendering: crispEdges;
+  }
+  .brush .extent {
+    fill: #354458;
+    shape-rendering: crispEdges;
+  }
+  .dot {
+    stroke: #000;
+  }
+  svg {
+    border: 1px solid #354458;
+    display: block;
+    margin: auto;
+    background-color: #F3EFE0;
+    /*font: 12px sans-serif;*/
+    font-size: 15px;
+  }
+  svg text{
+    /*unselectable text http://stackoverflow.com/questions/69430/is-there-a-way-to-make-text-unselectable-on-an-html-page*/
+    cursor: default;
+    -moz-user-select: -moz-none;
+    -khtml-user-select: none;
+    -webkit-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+  rect {
+    cursor: pointer;
+  }
+  #year_label {
+    font-size: 20px;
+    font-weight: bold;
+    text-anchor: middle;
+  }
+  #dataBox {
+    stroke: black;
+    stroke-width: 1px;
+    fill: #eeeeee;
+  }
+  #dataBox_title {
+    font-size: 20px;
+    font-family: Arial, sans-serif;
+    text-align: center;
+    text-decoration: underline;
+    color: #9A3334;
+  }
+  ul>li {
+    color: #354458;
+    }
+  #LargeGraph {
+    display: inline-block;
+    border: 1px solid #354458;
+    background-color: #333333;
+  }
+  #DataBox {
+    display: inline-block;
+    border: 2px solid #354458;
+    background-color: #F3EFE0;
+    margin-left: 1em;
+    overflow: auto;
+    text-align: left;
+  }
+  #wrapper {
+    text-align: center;
+  }
+  #main {
+    display: inline-block;
+    margin-left:auto;
+    margin-right:auto;
+    padding: 1em;
+    border: 2px solid #354458;
+    background-color: #354458;
+  }
+  #chart {
+  margin-left: 40px;
+  height: 510px;
+  }
+  .axis path, .axis line {
+  fill: none;
+  stroke: #000;
+  shape-rendering: crispEdges;
+}
+  label {
+    position: absolute;
+    top: 100px;
+    left: 50px;
+    font-family: 'EB Garamond', serif;
+    color: #354458;
+  }
+</style>
+
+<body>
+<h3>Weather Delayed Flights</h3>
+<script src="http://d3js.org/d3.v3.min.js"></script>
+<script src="http://d3js.org/topojson.v1.min.js"></script>
+<script src="http://code.jquery.com/jquery.min.js"></script>
+
+<div id="main">
+  <div id="Map"></div>
+    <select id="FlightToSelection">
+    <option>New York City</option>
+    <option>San Francisco</option>
+    <option>Atlanta</option>
+    <option>Los Angelos</option>
+    <option>Chicago</option>
+    <option>Dallas-Fort Worth</option>
+    <option>Denver</option>
+    <option>Charlotte</option>
+    <option>Las Vegas</option>
+    <option>Phoenix</option>
+    <option>Miami</option>
+    <option>Houston</option>
+    <option>Newark</option>
+    <option>Orlando</option>
+    <option>Seattle</option>
+    </select>
+
+    <select id="FlightFromSelection">
+    <option>San Francisco</option>
+    <option>New York City</option>
+    <option>Atlanta</option>
+    <option>Los Angelos</option>
+    <option>Chicago</option>
+    <option>Dallas-Fort Worth</option>
+    <option>Denver</option>
+    <option>Charlotte</option>
+    <option>Las Vegas</option>
+    <option>Phoenix</option>
+    <option>Miami</option>
+    <option>Houston</option>
+    <option>Newark</option>
+    <option>Orlando</option>
+    <option>Seattle</option>
+    </select>
+  <div id = "bar"></div>
+  <div id = "chart"></div>
+  <select id="selectWeather">
+  <option>Precipitation</option>
+  <option>MaxWind</option>
+  <option>SnowInches</option>
+  </select>
+</div>
+
+<script>
+  /*CONSTANTS*/
+  var MAP_WIDTH = 900,
+      MAP_HEIGHT = 700;
+      MAP_EDGES = {LEFT: 125, RIGHT: 800, TOP: 50, BOTTOM: 500},
+      MAP_AXIS_LABEL_LEFT = 30,
+      MAP_AXIS_LABEL_BOTTOM = 540;
+  var SLIDER_EDGES = {TOP: 50, RIGHT: 50, BOTTOM: 50, LEFT: 50},
+      SLIDER_WIDTH = MAP_WIDTH - SLIDER_EDGES.LEFT - SLIDER_EDGES.RIGHT,
+      SLIDER_HEIGHT = MAP_HEIGHT - SLIDER_EDGES.TOP - SLIDER_EDGES.BOTTOM,
+      SLIDER_SIZE = 30;
+
+  //Top 15
+  var AIRPORTS = [{"Code" : "ATL", "Location" : [33.6367, 84.4281]},
+                  {"Code" : "LAX", "Location" : [33.9425, 118.4081]},
+                  {"Code" : "ORD", "Location" : [41.9786, 87.9047]},
+                  {"Code" : "DFW", "Location" : [32.8969, 97.0381]},
+                  {"Code" : "DEN", "Location" : [39.8617, 104.6731]},
+                  {"Code" : "JFK", "Location" : [40.6397, 73.7789]},
+                  {"Code" : "SFO", "Location" : [37.6189, 122.3750]},
+                  {"Code" : "CLT", "Location" : [35.2139, 80.9431]},
+                  {"Code" : "LAS", "Location" : [36.0800, 115.1522]},
+                  {"Code" : "PHX", "Location" : [33.4342, 112.0117]},
+                  {"Code" : "MIA", "Location" : [25.7933, 80.2906]},
+                  {"Code" : "IAH", "Location" : [29.9844, 95.3414]},
+                  {"Code" : "EWR", "Location" : [40.6925, 74.1686]},
+                  {"Code" : "MCO", "Location" : [28.4294, 81.3089]},
+                  {"Code" : "SEA", "Location" : [47.4489, 122.3094]}];
+
+  /*GLOBAL VARIABLES*/
+  var currentStartMonth = 0, currentEndMonth = 11;
+  var currentTo = "JFK", currentFrom = "SFO";
+  var brush, brushg, currentMonthsText;
+  var mapProjection;
+  var allFlights;
+  var selectedFlights = [];
+  /*SETUP*/
+  var map = d3.select("#Map").append("svg").attr("width", MAP_WIDTH).attr("height", MAP_HEIGHT);
+  var regression = d3.select("#Regression").append("svg")//.attr("width", WIDTH).attr("height", HEIGHT);
+  var barGraph = d3.select("#BarGraph").append("svg")//.attr("width", WIDTH).attr("height", HEIGHT);
+
+  var data;
+  var selectedWeather = "Precipitation";
+  var margin = {top: 22.5, right: 19.5, bottom: 30.5, left: 39.5},
+    width = 960 - margin.right,
+    height = 500 - margin.top - margin.bottom,
+    padding = 30;
+  var city_airport_map = {};
+  var alldelays = 0;
+
+  var marginsBar = {
+    top: 12,
+    left: 100,
+    right: 48,
+    bottom: 24
+};
+
+var legendPanel = {
+    width: 200
+};
+
+var widthBar = 300,
+    heightBar = 200;
+    
+var dataset = [{
+        data: [{
+            timeset: 'Morning',
+            count: 0
+        }, {
+            timeset: 'Afternoon',
+            count:  0
+        }, {
+            timeset: 'Night',
+            count: 0
+        }, {
+            timeset: 'After Midnight',
+            count: 0
+        }],
+        name: 'Strong Wind'
+    }, {
+        data: [{
+            timeset: 'Morning',
+            count: 0
+        }, {
+            timeset: 'Afternoon',
+            count: 0
+        }, {
+            timeset: 'Night',
+            count: 0
+        }, {
+            timeset: 'After Midnight',
+            count: 0
+        }],
+        name: 'Heavy Rain'
+    }, {
+        data: [{
+            timeset: 'Morning',
+            count: 0
+        }, {
+            timeset: 'Afternoon',
+            count: 0
+        }, {
+            timeset: 'Night',
+            count: 0
+        }, {
+            timeset: 'After Midnight',
+            count: 0
+        }],
+        name: 'Heavy Snow'
+    } ];
+
+    var series = dataset.map(function (d) {
+        return d.name;
+    });
+    
+    var datasetBar = dataset.map(function (d) {
+        return d.data.map(function (o, i) {
+            // Structure it so that your numeric
+            // axis (the stacked amount) is y
+            return {
+                y: o.count,
+                x: o.timeset
+            };
+        });
+    });
+
+    var stack = d3.layout.stack();
+        stack(datasetBar);
+
+    datasetBar = datasetBar.map(function (group) {
+        return group.map(function (d) {
+            // Invert the x and y values, and y0 becomes x0
+            return {
+                x: d.y,
+                y: d.x,
+                x0: d.y0
+            };
+        });
+});
+
+
+
+    var svgBar = d3.select("#bar")
+        .append('svg')
+        .attr('width', MAP_WIDTH)
+        .attr('height', MAP_HEIGHT * 0.8)
+        .append('g')
+        .attr('transform', 'translate(' + marginsBar.left + ',' + marginsBar.top + ')');
+
+
+
+    var xMax = d3.max(datasetBar, function (group) {
+            return d3.max(group, function (d) {
+                return d.x + d.x0;
+            });
+        });
+
+    var xScaleBar = d3.scale.linear()
+            .domain([0, xMax])
+            .range([0, widthBar]);
+
+    var timeset = datasetBar[0].map(function (d) {
+            return d.y;
+        });
+
+    var yScaleBar = d3.scale.ordinal()
+            .domain(timeset)
+            .rangeRoundBands([0, heightBar], .1);
+        
+    
+    //_ = console.log(timeset),
+        
+
+    var xAxisBar = d3.svg.axis()
+            .scale(xScaleBar)
+            .orient('bottom'),
+
+        yAxisBar = d3.svg.axis()
+            .scale(yScaleBar)
+            .orient('left'),
+        
+        colours = d3.scale.category10(),
+        
+        groups = svgBar.selectAll('g')
+            .data(datasetBar)
+            .enter()
+            .append('g')
+            .style('fill', function (d, i) {
+            return colours(i);
+        });
+
+        var xAxisValueBar = svgBar.append('g')
+        .attr('class', 'axis')
+        .attr('transform', 'translate(0,' + heightBar + ')')
+        .call(xAxisBar);
+
+        var yAxisValueBar = svgBar.append('g')
+        .attr('class', 'axis')
+        .call(yAxisBar);
+
+        svgBar.append('rect')
+        .attr('fill', 'white')
+        .attr('border', 1)
+        .attr('width', 150 )
+        .attr('height', 30* datasetBar.length)
+        .attr('x', widthBar + marginsBar.left-20)
+        .attr('y', 0)
+        .style("stroke", "black");
+
+        series.forEach(function (s, i) {
+        svgBar.append('text')
+            .attr('fill', 'black')
+            .attr('x', widthBar+ marginsBar.left -8)
+            .attr('y', i * 24 + 24)
+            .style("font-size", "10px")
+            .text(s)
+
+        svgBar.append('rect')
+            .attr('fill', colours(i))
+            .attr('width', 40)
+            .attr('height', 12)
+            .attr('x', widthBar + marginsBar.left + 80)
+            .attr('y', i * 28 + 8);
+    });
+
+
+    var svgRegression = d3.select("#chart").append("svg")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom)
+    .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+    var xDomain = [];  
+    var yDomain = [];
+    var xScale = d3.scale.linear().domain(xDomain).range([0, width]),
+        yScale = d3.scale.linear().domain(yDomain).range([height, 0]);
+
+    // The x & y axes.
+    var xAxis = d3.svg.axis().orient("bottom").scale(xScale),
+    //.ticks(12, d3.format(",d")),
+        yAxis = d3.svg.axis().scale(yScale).orient("left");
+
+    // Add the x-axis.
+    var xAxisValue = svgRegression.append("g")
+        .attr("class", "axis")
+        .attr("transform", "translate(0," + height + ")")
+        .call(xAxis);
+
+    // Add the y-axis.
+    var yAxisValue = svgRegression.append("g")
+        .attr("class", "axis")
+        .call(yAxis);  
+
+    var xlabelRegression = svgRegression.append("text")
+        .attr("class", "x label")
+        .attr("text-anchor", "end")
+        .attr("x", width)
+        .attr("y", height - 6)
+        .text("Delay Time(minutes)");
+
+    var ylabelRegression = svgRegression.append("text")
+        .attr("class", "y label")
+        .attr("text-anchor", "end")
+        .attr("x", 6)
+        .attr("y", 6)
+        .attr("dy", ".75em")
+        .attr("transform", "rotate(-90)")
+        .text(function(){
+            if(selectedWeather == "MaxWind"){
+                return "Wind Speed(miles/hour)";
+        } else if(selectedWeather == "Precipitation"){
+                return "Precipitation(inches)"
+        } else if(selectedWeather == "SnowInches"){
+                return "Snow(inches)"   
+        }
+        });
+
+  d3.json("data15.json", function (allData) {
+    data = allData;
+    allFlights = allData;
+    console.log(allFlights[0].ATL);
+    for(var i = 0; i< allFlights.length; i++){
+        city_airport_map[Object.getOwnPropertyNames(allFlights[i])[0]] = i;
+    };
+    //create charts
+    createMap(map);
+    //createRegression(regression);
+    //createBarGraph(barGraph);
+    createSlider(map);
+    getSelectedData();
+    drawRegression();
+    drawBar();
+    //initially draw charts, assuming default range is the whole timeline
+    
+
+  });
+
+  function createMap (svg) {
+    mapProjection = d3.geo.albersUsa()
+      .scale(1000)
+      .translate([MAP_WIDTH / 2, MAP_HEIGHT / 3]); 
+    var path = d3.geo.path().projection(mapProjection);
+    var states;
+
+    d3.json("us.json", function(error, shapes) {
+      states = topojson.feature(shapes, shapes.objects.states).features;
+      
+      var statePaths = svg.append("g");
+      statePaths.selectAll("path").data(states).enter()
+        .append("path").attr("d", path)
+        .style("fill", "black").style("stroke", "#ccc");
+
+      AIRPORTS.forEach(function (d) {
+        projected = projectLatLong(d.Location)
+        svg.append("circle")
+          .attr("cx", projected[0])
+          .attr("cy", projected[1])
+          .attr("r", 3)
+          .attr("fill", "blue");
+      });
+
+      $(document).ready(function () {
+        var fromSel = $('#FlightFromSelection');
+        fromSel.change (function() {
+          currentFrom = selectionToCode($(this).val());
+          getSelectedData();
+          filterCharts();
+        });
+        var toSel = $('#FlightToSelection');
+        toSel.change (function() {
+          currentTo = selectionToCode($(this).val());
+          getSelectedData();
+          filterCharts();
+          });
+        });
+
+      filterCharts();
+    });
+  }
+
+  function createRegression (svg) {
+    //regression plot drawing/creation here
+  }
+
+  function createBarGraph (svg) {
+    //bar graph drawing/creation here
+  }
+
+  function createSlider (parentGraph) {
+    var x = d3.scale.linear()
+        .domain([0, 12])
+        .range([SLIDER_EDGES.LEFT, SLIDER_WIDTH]);
+
+    var monthTicks = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+
+    var sliderAxis = d3.svg.axis().scale(x).orient("bottom").tickValues(monthTicks).tickFormat(monthToString);
+
+    parentGraph.append("g")
+      .attr("class", "slider axis")
+      .attr("transform", "translate(0," + SLIDER_HEIGHT + ")")
+      .call(sliderAxis);
+      //http://stackoverflow.com/questions/17544546/d3-js-align-text-labels-between-ticks-on-the-axis
+      // That link shows how to get tick labels in the middle
+
+    brush = d3.svg.brush()
+      .x(x)
+      .extent([0, 12])
+      .on("brushend", brushend);
+
+    brushg = parentGraph.append("g")
+      .attr("class", "brush")
+      .call(brush);
+
+    brushg.selectAll("rect")
+      .attr("height", SLIDER_SIZE)
+      .attr("transform", "translate(0," + (SLIDER_HEIGHT - SLIDER_SIZE) + ")");
+
+    //handles on brush
+    var arc = d3.svg.arc()
+      .outerRadius(SLIDER_SIZE / 2)
+      .startAngle(0)
+      .endAngle(function(d, i) { return i ? -Math.PI : Math.PI; });
+
+    brushg.selectAll(".resize").append("path")
+      .attr("transform", "translate(0," +  (SLIDER_HEIGHT - SLIDER_SIZE/2) + ")")
+      .attr("d", arc);
+  }
+
+  function monthToString(monthNum) {
+    var months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December", ""];
+
+    return months[monthNum]
+  }
+
+  function brushend() {
+    var extent = brush.extent();
+    var diff = extent[1] - extent[0];
+
+    //snap to full months
+    extent[0] = Math.round(extent[0])
+    extent[1] = Math.round(extent[1])
+
+    //force span of at least 1 month
+    if(diff < 1) {
+      extent[1] = extent[0] + 1;
+    }
+    if(extent[0] == 12) {
+      extent[0] = 11;
+      extent[1] = 12;
+    }
+
+    currentStartMonth = extent[0]
+    currentEndMonth = extent[1]-1
+    getSelectedData();
+    filterCharts();
+
+    brush.extent(extent)(d3.select(this));
+  }
+  function getSelectedData(){
+    selectedFlights = [];
+        function isSelected(flight){
+            return flight.to == currentTo;
+        }
+
+        for(var i = currentStartMonth; i <= currentEndMonth; i++){
+          //selected Month
+          //console.log(allFlights[city_airport_map[currentFrom]].currentFrom[i].flights);
+            for(var j = 0; j< allFlights[city_airport_map[currentFrom]][currentFrom][i].length; j++){ // all days
+                    var temp_data = allFlights[city_airport_map[currentFrom]][currentFrom][i][j].flights.filter(isSelected);
+                    for(var k = 0; k< temp_data.length; k++){
+                        temp_data[k].weather = allFlights[city_airport_map[currentFrom]][currentFrom][i][j].weather;
+                    }
+                    selectedFlights = selectedFlights.concat(temp_data);
+            }
+        }
+    }
+
+    function drawRegression(){
+        svgRegression.selectAll("circle").remove();
+        svgRegression.selectAll("line").remove();
+        var selectedWeatherFlights;
+        if(selectedWeather == "MaxWind"){
+            selectedWeatherFlights = selectedFlights.filter(function(d){
+                return d.weather.Precipitation == "0" &&
+                d.weather.SnowInches == "0";
+            });
+        } else if(selectedWeather == "Precipitation"){
+            selectedWeatherFlights = selectedFlights.filter(function(d){
+                return d.weather.Precipitation != "0" &&
+                d.weather.SnowInches == "0";
+            });
+        } else if(selectedWeather == "SnowInches"){
+            selectedWeatherFlights = selectedFlights.filter(function(d){
+                return d.weather.SnowInches != "0";
+            });
+        }
+
+        xDomain = [0,d3.max(selectedWeatherFlights, function(d){return Number(d.WeatherDelay)})];  
+        yDomain = [d3.min(selectedWeatherFlights, function(d){return Number(d.weather[selectedWeather])}),d3.max(selectedWeatherFlights, function(d){return Number(d.weather[selectedWeather])})];
+        xScale = d3.scale.linear().domain(xDomain).range([0, width]),
+        yScale = d3.scale.linear().domain(yDomain).range([height, 0]);
+
+    // The x & y axes.
+        xAxis = d3.svg.axis().orient("bottom").scale(xScale),
+    //.ticks(12, d3.format(",d")),
+        yAxis = d3.svg.axis().scale(yScale).orient("left");
+
+        xAxisValue.call(xAxis);
+        yAxisValue.call(yAxis);
+
+        ylabelRegression.text(function(){
+            if(selectedWeather == "MaxWind"){
+                return "Wind Speed(miles/hour)";
+        } else if(selectedWeather == "Precipitation"){
+                return "Precipitation(inches)"
+        } else if(selectedWeather == "SnowInches"){
+                return "Snow(inches)"   
+        }
+        });
+
+
+        
+
+        var selectedPoints = selectedWeatherFlights.map(function(d){
+            return {x : Number(d.WeatherDelay),
+                    y : Number(d.weather[selectedWeather])
+                    };
+        })
+
+        function getModel (activePoints) {  
+            var model = {};
+            var meanX = d3.mean(activePoints, function (d) { 
+                return d.x;
+            });
+            var meanY = d3.mean(activePoints, function (d) { 
+                return d.y;
+            });
+            model.slope = d3.sum(activePoints, function (d) {
+                return (d.x - meanX) * (d.y - meanY);
+            });
+            model.slope /= d3.sum(activePoints, function (d) {
+                return (d.x - meanX) * (d.x - meanX);
+            });
+            model.intercept = meanY - model.slope * meanX;
+            
+            return model;
+        }
+
+        //draw all circles
+        circles = svgRegression.selectAll("circle").data(selectedPoints).enter()
+            .append("circle")
+            .attr("cx", function (d) { return xScale(d.x); })
+            .attr("cy", function (d) { return yScale(d.y); })
+            .attr("r", 3)
+            .style("opacity", 0.8 )
+            .style("fill", "#99f" );
+
+        //draw regressionline
+        var model = getModel(selectedPoints);
+            regressionLine = svgRegression.append("line")
+            .attr("x1", xScale(xDomain[0]))
+            .attr("y1", yScale(model.slope * xDomain[0] + model.intercept))
+            .attr("x2", xScale(xDomain[1]))
+            .attr("y2", yScale(model.slope * xDomain[1] + model.intercept))
+            .style("stroke", "#0000FF")
+            .style("opacity", 0.3);
+    }
+
+    function drawBar(){
+        var counttemp = {
+            morning:{strongWind: 0, heavyRain: 0, heavySnow: 0},
+            afternoon:{strongWind: 0, heavyRain: 0, heavySnow: 0},
+            night:{strongWind: 0, heavyRain: 0, heavySnow: 0},
+            aftermidnight:{strongWind: 0, heavyRain: 0, heavySnow: 0}
+        };
+        console.log(counttemp);
+        for(var i = 0 ; i < selectedFlights.length; i++){
+            if(Number(selectedFlights[i].DepTime) >= 0 && Number(selectedFlights[i].DepTime) <600 && selectedFlights[i].WeatherDelay != "0"){
+                if(selectedFlights[i].weather.Precipitation == "0" &&
+                   selectedFlights[i].weather.SnowInches == "0") {
+                    counttemp.aftermidnight.strongWind ++;
+                } else if(selectedFlights[i].weather.Precipitation != "0" &&
+                   selectedFlights[i].weather.SnowInches == "0"){
+                    counttemp.aftermidnight.heavyRain ++;
+                } else if(selectedFlights[i].weather.SnowInches != "0"){
+                    counttemp.aftermidnight.heavySnow ++;   
+                }
+            }
+            if(Number(selectedFlights[i].DepTime) >= 600 && Number(selectedFlights[i].DepTime) < 1200 && selectedFlights[i].WeatherDelay != "0"){
+                if(selectedFlights[i].weather.Precipitation == "0" &&
+                   selectedFlights[i].weather.SnowInches == "0") {
+                    counttemp.morning.strongWind ++;
+                } else if(selectedFlights[i].weather.Precipitation != "0" &&
+                   selectedFlights[i].weather.SnowInches == "0"){
+                    counttemp.morning.heavyRain ++;
+                } else if(selectedFlights[i].weather.SnowInches != "0"){
+                    counttemp.morning.heavySnow ++; 
+                }
+            }
+            if(Number(selectedFlights[i].DepTime) >= 1200 && Number(selectedFlights[i].DepTime) < 1800 && selectedFlights[i].WeatherDelay != "0"){
+                if(selectedFlights[i].weather.Precipitation == "0" &&
+                   selectedFlights[i].weather.SnowInches == "0") {
+                    counttemp.afternoon.strongWind ++;
+                } else if(selectedFlights[i].weather.Precipitation != "0" &&
+                   selectedFlights[i].weather.SnowInches == "0"){
+                    counttemp.afternoon.heavyRain ++;
+                } else if(selectedFlights[i].weather.SnowInches != "0"){
+                    counttemp.afternoon.heavySnow ++;   
+                }
+            }
+            if(Number(selectedFlights[i].DepTime) >= 1800 && Number(selectedFlights[i].DepTime) < 2400 && selectedFlights[i].WeatherDelay != "0"){
+                if(selectedFlights[i].weather.Precipitation == "0" &&
+                   selectedFlights[i].weather.SnowInches == "0") {
+                    counttemp.night.strongWind ++;
+                } else if(selectedFlights[i].weather.Precipitation != "0" &&
+                   selectedFlights[i].weather.SnowInches == "0"){
+                    counttemp.night.heavyRain ++;
+                } else if(selectedFlights[i].weather.SnowInches != "0"){
+                    counttemp.night.heavySnow ++;   
+                }
+            }
+        }
+
+            dataset[0].data[0].count = counttemp.morning.strongWind;
+            dataset[0].data[1].count = counttemp.afternoon.strongWind;
+            dataset[0].data[2].count = counttemp.night.strongWind;
+            dataset[0].data[3].count = counttemp.aftermidnight.strongWind;
+
+            dataset[1].data[0].count = counttemp.morning.heavyRain;
+            dataset[1].data[1].count = counttemp.afternoon.heavyRain;
+            dataset[1].data[2].count = counttemp.night.heavyRain;
+            dataset[1].data[3].count = counttemp.aftermidnight.heavyRain;
+
+            dataset[2].data[0].count = counttemp.morning.heavySnow;
+            dataset[2].data[1].count = counttemp.afternoon.heavySnow;
+            dataset[2].data[2].count = counttemp.night.heavySnow;
+            dataset[2].data[3].count = counttemp.aftermidnight.heavySnow;
+
+            alldelays = counttemp.morning.strongWind+
+                        counttemp.afternoon.strongWind+
+                        counttemp.night.strongWind+
+                        counttemp.aftermidnight.strongWind+
+                        counttemp.morning.heavyRain+
+                        counttemp.afternoon.heavyRain+
+                        counttemp.night.heavyRain+
+                        counttemp.aftermidnight.heavyRain+
+                        counttemp.morning.heavySnow+
+                        counttemp.afternoon.heavySnow+
+                        counttemp.night.heavySnow+
+                        counttemp.aftermidnight.heavySnow;
+
+
+            groups.selectAll(".barRect").remove();
+            datasetBar = dataset.map(function (d) {
+        return d.data.map(function (o, i) {
+            // Structure it so that your numeric
+            // axis (the stacked amount) is y
+            return {
+                y: o.count,
+                x: o.timeset
+            };
+        });
+    });
+        stack(datasetBar);
+
+        datasetBar = datasetBar.map(function (group) {
+        return group.map(function (d) {
+            // Invert the x and y values, and y0 becomes x0
+            return {
+                x: d.y,
+                y: d.x,
+                x0: d.y0
+            };
+        });
+    });
+
+
+     xMax = d3.max(datasetBar, function (group) {
+            return d3.max(group, function (d) {
+                return d.x + d.x0;
+            });
+        });
+
+    xScaleBar = d3.scale.linear()
+            .domain([0, xMax])
+            .range([0, widthBar]);
+
+        
+    //_ = console.log(timeset),
+        
+
+     xAxisBar = d3.svg.axis()
+            .scale(xScaleBar)
+            .orient('bottom');
+        
+
+    xAxisValueBar.call(xAxisBar);
+
+
+    groups.data(datasetBar).enter();
+            rects = groups.selectAll(".barRect")
+                .data(function (d) {
+                return d;
+            })
+                .enter()
+                .append('rect')
+                .attr('class', "barRect")
+                .attr('x', function (d) {
+                return xScaleBar(d.x0);
+            })
+                .attr('y', function (d, i) {
+                return yScaleBar(d.y)+6;
+            })
+                .attr('height', 30)
+                .attr('width', function (d) {
+                return xScaleBar(d.x);
+            })      
+            
+
+            
+        }
+
+
+         $(document).ready(function(){ // ran when the document is fully loaded
+      // retrieve the jQuery wrapped dom object identified by the selector '#selectOccupation'
+      var sel = $('#selectWeather');
+      // assign a change listener to it
+      sel.change(function(){ //inside the listener
+        // retrieve the value of the object firing the event (referenced by this)
+        selectedWeather = $(this).val();
+        drawRegression();
+
+      });
+    });
+  function filterCharts () {
+
+    //get updated data
+    updateMap();
+    drawRegression();
+    drawBar();
+
+  }
+
+  function updateMap () {
+
+    d3.select(".flightpath").remove()
+
+    //delete previous route
+    map.append("path").attr("d",getLinePath(currentTo, currentFrom))
+          .attr("stroke",getLineStroke(currentTo, currentFrom, currentStartMonth, currentEndMonth))
+          .attr("stroke-width",getLineWidth(currentTo, currentFrom, currentStartMonth, currentEndMonth))
+          .attr("fill","none")
+          .attr("class", "flightpath");
+  }
+
+  function updateRegression () {
+
+  }
+
+  function updateBarGraph () {
+
+  }
+
+  function projectLatLong(coords) {
+    return mapProjection([-1*coords[1], coords[0]]);
+  }
+
+  function getLinePath(toCity, fromCity) {
+    var offsetx = 0;
+    var offsety = 0;
+    
+    console.log(toCity)
+    console.log(fromCity)
+
+    for(var i=0; i<15; i++) {
+      if (AIRPORTS[i]["Code"] == fromCity) {
+        fromProjected = projectLatLong(AIRPORTS[i]["Location"]);
+      }
+      else if (AIRPORTS[i]["Code"] == toCity) {
+        toProjected = projectLatLong(AIRPORTS[i]["Location"]);
+      }
+    }
+
+    if (fromProjected[0] > 700 && toProjected[0] > 700) {
+      offsetx = 30;
+    }
+    else if (fromProjected[0] < 200 && toProjected[0] < 200) {
+      offsetx = -30;
+    }
+
+    else if (fromProjected[1] > 214 && toProjected[1] > 214) {
+      offsety = Math.abs(fromProjected[0] - toProjected[0]) * (0.2);
+    }
+    else if (fromProjected[1] < 214 && toProjected[1] < 214) {
+      offsety = Math.abs(fromProjected[0] - toProjected[0]) * (-0.155);
+    }
+    else {
+      offsety = Math.abs(fromProjected[0] - toProjected[0]) * (-0.11);
+    }
+
+    var lineData=[{"x":fromProjected[0],"y":fromProjected[1]},
+                  {"x":(fromProjected[0]+toProjected[0])/2+offsetx,"y":(fromProjected[1]+toProjected[1])/2+offsety},
+                  {"x":toProjected[0],"y":toProjected[1]}];
+
+    var lineFunction = d3.svg.line().x(function(d){return d.x;})
+                .y(function(d){return d.y;})
+                .interpolate("basis");
+
+    return lineFunction(lineData);
+  }
+
+  function getLineStroke(toCity, fromCity, monthStart, monthEnd) {
+    return "red";
+  }
+
+  function getLineWidth(toCity, fromCity, monthStart, monthEnd) {
+    return .75;
+  }
+
+  function selectionToCode(city) {
+    var codes = {"Atlanta" : "ATL",
+                 "Los Angelos" : "LAX",
+                 "Chicago" : "ORD",
+                 "Dallas-Fort Worth" : "DFW", 
+                 "Denver" : "DEN",
+                 "New York City" : "JFK",
+                 "San Francisco" : "SFO",
+                 "Charlotte" : "CLT",
+                 "Las Vegas" : "LAS",
+                 "Phoenix" : "PHX", 
+                 "Miami" : "MIA",
+                 "Houston" : "IAH",
+                 "Newark" : "EWR",
+                 "Orlando" : "MCO",
+                 "Seattle" : "SEA",
+                 "All" : "ALL"};
+
+    return codes[city];
+  }
+
+
+</script>
+
+</body>
+</html>
